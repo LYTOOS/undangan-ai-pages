@@ -26,19 +26,31 @@ export async function onRequest(context) {
 
     const nonce = Date.now() + Math.random().toString(36).slice(2);
 
+    const styles = [
+      "doa lembut penuh harap",
+      "doa singkat tapi menyentuh",
+      "doa Islami modern",
+      "doa penuh ketenangan",
+      "doa bernuansa Al-Qur’an"
+    ];
+    
+    const style = styles[Math.floor(Math.random() * styles.length)];
+    
     const prompt = `
-Buat 1 ucapan ${tone} untuk pertunangan.
-Nama tamu: ${guest}
-
-Aturan:
-- Bahasa Indonesia
-- Maks 3 kalimat
-- Variasi kalimat
-- Tidak klise
-- Jangan ulangi hasil sebelumnya
-
-ID: ${nonce}
-`;
+    TULIS SATU ucapan ${tone} berupa ${style}.
+    
+    Aturan WAJIB:
+    - Bahasa Indonesia
+    - 2–3 kalimat saja
+    - Jangan klise
+    - Jangan ulangi struktur kalimat
+    - Hasil HARUS berbeda setiap request
+    
+    Nama tamu: ${guest}
+    ID unik: ${Date.now()}-${Math.random()}
+    
+    Tulis langsung tanpa penjelasan.
+    `;
 
     const aiRes = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${env.GEMINI_API_KEY}`,
