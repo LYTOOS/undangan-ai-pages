@@ -24,32 +24,39 @@ export async function onRequest(context) {
     const guest = body.guest || "Tamu Undangan";
     const tone = body.tone || "Islami";
 
-    const nonce = Date.now() + Math.random().toString(36).slice(2);
+    const seed = crypto.randomUUID();
 
-    const styles = [
-      "doa lembut penuh harap",
-      "doa singkat tapi menyentuh",
-      "doa Islami modern",
-      "doa penuh ketenangan",
-      "doa bernuansa Al-Qur’an"
-    ];
+    const mood = [
+      "tenang",
+      "khusyuk",
+      "hangat",
+      "haru",
+      "penuh syukur",
+      "lembut"
+    ][Math.floor(Math.random() * 6)];
     
-    const style = styles[Math.floor(Math.random() * styles.length)];
+    const length = [
+      "2 kalimat",
+      "3 kalimat",
+      "maksimal 35 kata",
+      "maksimal 40 kata"
+    ][Math.floor(Math.random() * 4)];
     
     const prompt = `
-    TULIS SATU ucapan ${tone} berupa ${style}.
+    Kamu adalah AI penulis doa pernikahan profesional.
     
-    Aturan WAJIB:
+    Tulis SATU ucapan ${tone} bernuansa ${mood}.
+    Panjang: ${length}
+    
+    ATURAN WAJIB:
     - Bahasa Indonesia
-    - 2–3 kalimat saja
-    - Jangan klise
-    - Jangan ulangi struktur kalimat
-    - Hasil HARUS berbeda setiap request
+    - DILARANG mengulang struktur sebelumnya
+    - DILARANG kalimat klise
+    - HARUS terdengar alami & manusiawi
+    - SETIAP OUTPUT HARUS BERBEDA TOTAL
     
+    Seed unik: ${seed}
     Nama tamu: ${guest}
-    ID unik: ${Date.now()}-${Math.random()}
-    
-    Tulis langsung tanpa penjelasan.
     `;
 
     const aiRes = await fetch(
@@ -58,7 +65,12 @@ export async function onRequest(context) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 1.15,
+            topK: 50,
+            topP: 0.95
+          }
         })
       }
     );
