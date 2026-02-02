@@ -1,90 +1,122 @@
-export async function onRequest(context) {
-  const { request, env } = context;
+export default {
+  async fetch(req, env) {
 
-  // ===== CORS =====
-  if (request.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type"
-      }
-    });
-  }
+    /* =======================
+       CORS (WAJIB)
+    ======================= */
+    if (req.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type"
+        }
+      });
+    }
 
-  if (request.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
+    if (req.method !== "POST") {
+      return new Response("Method Not Allowed", {
+        status: 405,
+        headers: { "Access-Control-Allow-Origin": "*" }
+      });
+    }
 
-  const { guest = "Tamu", tone = "Islami" } = await request.json();
+    /* =======================
+       REQUEST BODY
+    ======================= */
+    const body = await req.json();
+    const guest = body.guest || "Tamu Undangan";
+    const tone = body.tone || "Islami";
+    let message = body.message || null;
 
-  // ===== PROMPT RANDOMIZER =====
-  const prompts = {
-    Islami: [
-      `Buatkan doa pernikahan Islami yang lembut dan singkat untuk ${guest}`,
-      `Tuliskan ucapan doa Islami penuh berkah untuk ${guest}`,
-      `Buat doa Islami romantis dan elegan untuk ${guest}`
-    ],
-    Puitis: [
-      `Tuliskan ucapan cinta puitis dan elegan untuk ${guest}`,
-      `Buat kalimat indah penuh makna tentang cinta untuk ${guest}`,
-      `Ucapan romantis berbahasa puitis untuk ${guest}`
-    ],
-    Santai: [
-      `Buat ucapan santai, hangat, dan tulus untuk ${guest}`,
-      `Ucapan bahagia sederhana tapi berkesan untuk ${guest}`,
-      `Kalimat ringan penuh doa untuk ${guest}`
-    ]
-  };
+    /* =======================
+       AI GENERATOR (ANTI SAMA)
+    ======================= */
+    if (!message) {
 
-  const pick =
-    prompts[tone]?.[
-      Math.floor(Math.random() * prompts[tone].length)
-    ] || prompts.Islami[0];
+      const styles = {
+        Islami: [
+          "lembut dan penuh doa",
+          "syar'i dan menenangkan",
+          "islami modern dan hangat"
+        ],
+        Puitis: [
+          "romantis puitis",
+          "sastra indah",
+          "kalimat elegan penuh makna"
+        ],
+        Santai: [
+          "santai dan akrab",
+          "ringan tapi berkesan",
+          "hangat seperti sahabat"
+        ]
+      };
 
-  // ===== GEMINI API =====
-  const aiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${env.GEMINI_API_KEY}`,
-    {
+      const randomStyle =
+        styles[tone][Math.floor(Math.random() * styles[tone].length)];
+
+      const nonce =
+        Date.now() + "-" + Math.random().toString(36).substring(2, 8);
+
+      const prompt = `
+Buatkan 1 ucapan ${tone} ${randomStyle} untuk acara pertunangan.
+
+Nama tamu: ${guest}
+
+Aturan:
+- Maksimal 3 kalimat
+- Bahasa Indonesia
+- Tidak klise
+- Jangan mengulang kalimat sebelumnya
+- Variasikan diksi dan struktur kalimat
+
+ID Unik: ${nonce}
+      `;
+
+      const aiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${env.GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        }
+      );
+
+      const aiData = await aiRes.json();
+
+      message =
+        aiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "Semoga Allah memberkahi langkah indah kalian 🤍";
+    }
+
+    /* =======================
+       SAVE TO FIREBASE
+    ======================= */
+    await fetch(`${env.FIREBASE_URL}/rsvp.json?auth=${env.FIREBASE_SECRET}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: pick }] }]
+        guest,
+        tone,
+        message,
+        time: new Date().toISOString(),
+        source: "ai"
       })
-    }
-  );
+    });
 
-  const aiData = await aiRes.json();
-
-  const text =
-    aiData?.candidates?.[0]?.content?.parts?.[0]?.text ||
-    "Semoga Allah memberkahi langkah indah kalian 🤍";
-
-  const payload = {
-    guest,
-    tone,
-    message: text,
-    time: new Date().toISOString(),
-    source: "ai"
-  };
-
-  // ===== SAVE TO FIREBASE =====
-  await fetch(
-    `${env.FIREBASE_URL}/rsvp.json?auth=${env.FIREBASE_SECRET}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    }
-  );
-
-  return new Response(
-    JSON.stringify({ text }),
-    {
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
+    /* =======================
+       RESPONSE
+    ======================= */
+    return new Response(
+      JSON.stringify({ text: message }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
       }
-    }
-  );
-}
+    );
+  }
+};
